@@ -1,0 +1,56 @@
+name: AutoContentPublisher
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # Runs daily at 10 AM UTC (adjust as needed for Kenyan time)
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10' # Specify a Python version
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create secrets.json (for local testing, avoid for production secrets)
+        # In a real scenario, use GitHub Secrets directly in scripts
+        run: |
+          echo "Writing dummy secrets.json for script execution. Replace with GitHub Secrets."
+          echo '{"OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}", "SERPER_API_KEY": "${{ secrets.SERPER_API_KEY }}", "BUFFER_ACCESS_TOKEN": "${{ secrets.BUFFER_ACCESS_TOKEN }}", "BUFFER_PROFILE_IDS": "${{ secrets.BUFFER_PROFILE_IDS }}"}' > secrets.json
+          # Consider removing secrets.json after script execution for security
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_PROFILE_IDS: ${{ secrets.BUFFER_PROFILE_IDS }}
+
+      - name: Run content automation scripts
+        run: |
+          python scripts/fetch_keywords.py
+          python scripts/generate_content.py
+          python scripts/social_snippets.py
+          python scripts/auto_image.py
+          python scripts/publish_workflow.py
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Pass secrets as environment variables
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          BUFFER_ACCESS_TOKEN: ${{ secrets.BUFFER_ACCESS_TOKEN }}
+          BUFFER_PROFILE_IDS: ${{ secrets.BUFFER_PROFILE_IDS }}
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add blog/ images/ content/data/keyword_trends.json # Add generated files
+          git commit -m "Automated content update: $(date +'%Y-%m-%d %H:%M')" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub Actions
